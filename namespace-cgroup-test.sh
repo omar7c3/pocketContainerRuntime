@@ -2,182 +2,223 @@
 
 ENGINE="./pocketContainerRuntime"
 ROOTFS="./rootfs"
-RAND="test-$RANDOM"
 
+# ── ANSI color & style codes ────────────────────────────────────────────────
+RESET="\033[0m"
+BOLD="\033[1m"
+DIM="\033[2m"
+
+BLACK="\033[30m"
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+MAGENTA="\033[35m"
+CYAN="\033[36m"
+WHITE="\033[37m"
+
+BG_BLACK="\033[40m"
+BG_BLUE="\033[44m"
+BG_CYAN="\033[46m"
+
+# ── Helper: width ────────────────────────────────────────────────────────────
+WIDTH=62
+
+# ── Primitives ───────────────────────────────────────────────────────────────
+hline() {
+    printf "${DIM}%s${RESET}\n" "$(printf '─%.0s' $(seq 1 $WIDTH))"
+}
+
+# Section banner  e.g.  banner "[UTS]" "Hostname Isolation"  CYAN
+banner() {
+    local tag="$1" title="$2" color="$3"
+    echo
+    printf "${BOLD}${color}%-8s${RESET}  ${BOLD}%s${RESET}\n" "$tag" "$title"
+    hline
+}
+
+# Key / value row
+row() {
+    local key="$1" val="$2" color="${3:-$WHITE}"
+    printf "  ${DIM}%-30s${RESET}  ${color}%s${RESET}\n" "$key" "$val"
+}
+
+# PASS / FAIL / SKIP badge
+badge_pass() { printf "${BOLD}${GREEN}  ✔  PASS${RESET}  %s\n" "$1"; }
+badge_fail() { printf "${BOLD}${RED}  ✘  FAIL${RESET}  %s\n" "$1"; }
+badge_skip() { printf "${BOLD}${YELLOW}  ⊘  SKIP${RESET}  %s\n" "$1"; }
+badge_info() { printf "${BOLD}${CYAN}  ℹ  INFO${RESET}  %s\n" "$1"; }
+
+# Context note
+ctx() { printf "  ${DIM}%s${RESET}\n" "$1"; }
+
+# ── Header ───────────────────────────────────────────────────────────────────
 echo
-echo "==================== FULL NAMESPACE TEST ===================="
+printf "${BOLD}${BG_BLUE}${WHITE}  %-${WIDTH}s  ${RESET}\n" "pocketContainerRuntime — Namespace & Cgroup Test"
+printf "${DIM}  %-${WIDTH}s${RESET}\n" "namespace-cgroup-test.sh"
 echo
 
-line() { printf "%-32s %s\n" "$1" "$2"; }
-
-############################################################
-# 1. UTS NAMESPACE
-############################################################
-echo "[UTS] Hostname isolation"
-echo "Context:"
-echo " - With --uts: container has its own hostname."
-echo " - Without --uts: hostname changes affect host."
+# ── 1. UTS ───────────────────────────────────────────────────────────────────
+banner "[UTS]" "Hostname Isolation" "$CYAN"
+ctx "With --uts: container gets its own hostname (changes stay inside)."
+ctx "Without --uts: hostname changes bleed back to the host."
 echo
 
 HOST_BEFORE=$(hostname)
-
 WITH_BEFORE=$($ENGINE run --uts $ROOTFS /bin/sh -c "hostname")
 WITH_AFTER=$($ENGINE run --uts $ROOTFS /bin/sh -c "hostname uts-demo; hostname")
-
 WITHOUT_BEFORE=$($ENGINE run $ROOTFS /bin/sh -c "hostname")
 WITHOUT_AFTER=$($ENGINE run $ROOTFS /bin/sh -c "hostname uts-demo-$RANDOM; hostname")
-
 HOST_AFTER=$(hostname)
 
-line "Host before:" "$HOST_BEFORE"
-line "Host after:" "$HOST_AFTER"
+row "Host before" "$HOST_BEFORE" "$WHITE"
+row "Host after" "$HOST_AFTER" "$WHITE"
+echo
+row "With --uts  (before)" "$WITH_BEFORE"  "$GREEN"
+row "With --uts  (after)"  "$WITH_AFTER"   "$GREEN"
+echo
+row "Without --uts (before)" "$WITHOUT_BEFORE" "$YELLOW"
+row "Without --uts (after)"  "$WITHOUT_AFTER"  "$YELLOW"
+
+echo
+# --uts isolation: the hostname set inside the container must NOT match the host's current hostname
+if [ "$WITH_AFTER" != "$HOST_AFTER" ]; then
+    badge_pass "With --uts: hostname change stayed inside container"
+else
+    badge_fail "With --uts: hostname leaked to host"
+fi
+# without --uts: hostname set inside container IS expected to affect the host
+if [ "$WITHOUT_AFTER" = "$HOST_AFTER" ]; then
+    badge_pass "Without --uts: hostname change visible on host (expected)"
+else
+    badge_fail "Without --uts: hostname change not reflected on host"
+fi
+
+# ── 2. PID ───────────────────────────────────────────────────────────────────
+banner "[PID]" "Process Isolation" "$MAGENTA"
+ctx "With --pid: container init is PID 1 (full PID namespace)."
+ctx "Without --pid: process keeps its host PID."
 echo
 
-line "With --uts (before):" "$WITH_BEFORE"
-line "With --uts (after):" "$WITH_AFTER"
+PID_WITH=$($ENGINE run --pid $ROOTFS /bin/sh -c "echo \$\$")
+PID_WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "echo \$\$")
+
+row "With --pid"    "$PID_WITH"    "$GREEN"
+row "Without --pid" "$PID_WITHOUT" "$YELLOW"
 echo
 
-line "Without --uts (before):" "$WITHOUT_BEFORE"
-line "Without --uts (after):" "$WITHOUT_AFTER"
+if [ "$PID_WITH" = "1" ]; then
+    badge_pass "PID inside namespace is 1"
+else
+    badge_fail "Expected PID 1, got $PID_WITH"
+fi
+
+# ── 3. MOUNT ─────────────────────────────────────────────────────────────────
+banner "[MNT]" "Mount-Tree Isolation" "$BLUE"
+ctx "Tests mount namespace inode — NOT storage isolation."
+ctx "With --mnt: inode differs from host. Without --mnt: inode matches."
 echo
 
-############################################################
-# 2. PID NAMESPACE
-############################################################
-echo "[PID] Process isolation"
-echo "Context:"
-echo " - With --pid: container init becomes PID 1."
-echo " - Without --pid: process has normal host PID."
-echo
-
-WITH=$($ENGINE run --pid $ROOTFS /bin/sh -c "echo \$\$")
-WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "echo \$\$")
-
-line "With --pid:" "$WITH"
-line "Without --pid:" "$WITHOUT"
-echo
-
-############################################################
-# 3. MOUNT NAMESPACE (INODE TEST)
-############################################################
-echo "[MNT] Mount-tree isolation (NOT storage isolation)"
-echo "Context:"
-echo " - With --mnt: Inode should DIFFERENT from the host."
-echo " - Without --mnt: Inode should MATCH the host."
-echo
-
-# 1. Capture the Host's true Mount Namespace Inode
 HOST_MNT=$(readlink /proc/self/ns/mnt)
-
-# 2. Capture the Container's Mount Namespace Inode (with and without --mnt)
 CONTAINER_WITH_MNT=$($ENGINE run --mnt $ROOTFS /bin/sh -c "readlink /proc/self/ns/mnt" || echo "ERROR")
 CONTAINER_WITHOUT_MNT=$($ENGINE run $ROOTFS /bin/sh -c "readlink /proc/self/ns/mnt" || echo "ERROR")
 
-# 3. Evaluate results safely using string comparison
-if [ "$HOST_MNT" = "$CONTAINER_WITHOUT_MNT" ]; then
-    WITHOUT_RESULT="PASS (Shared with host: $CONTAINER_WITHOUT_MNT)"
-else
-    WITHOUT_RESULT="FAIL (Leaked/Mutated namespace: $CONTAINER_WITHOUT_MNT)"
-fi
+row "Host namespace inode"   "$HOST_MNT"             "$WHITE"
+row "With --mnt inode"       "$CONTAINER_WITH_MNT"   "$GREEN"
+row "Without --mnt inode"    "$CONTAINER_WITHOUT_MNT" "$YELLOW"
+echo
 
 if [ "$HOST_MNT" != "$CONTAINER_WITH_MNT" ] && [ "$CONTAINER_WITH_MNT" != "ERROR" ]; then
-    WITH_RESULT="PASS (Isolated: $CONTAINER_WITH_MNT)"
+    badge_pass "With --mnt: namespace isolated ($CONTAINER_WITH_MNT)"
 else
-    WITH_RESULT="FAIL (Not isolated or Engine crashed)"
+    badge_fail "With --mnt: not isolated or engine crashed"
 fi
 
-# Output clean, descriptive lines
-line "Host Namespace Inode:" "$HOST_MNT"
-line "With --mnt implementation:"    "$WITH_RESULT"
-line "Without --mnt implementation:" "$WITHOUT_RESULT"
+if [ "$HOST_MNT" = "$CONTAINER_WITHOUT_MNT" ]; then
+    badge_pass "Without --mnt: namespace shared with host"
+else
+    badge_fail "Without --mnt: unexpected namespace leak ($CONTAINER_WITHOUT_MNT)"
+fi
+
+# ── 4. NETWORK ───────────────────────────────────────────────────────────────
+banner "[NET]" "Network Isolation" "$CYAN"
+ctx "With --net: container sees minimal interfaces (lo only)."
+ctx "Without --net: container inherits all host interfaces."
 echo
 
+NET_WITH=$($ENGINE run --net $ROOTFS /bin/sh -c "ip link show | wc -l")
+NET_WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "ip link show | wc -l")
+# ip link show prints 2 lines per interface
+IF_WITH=$(( NET_WITH / 2 ))
+IF_WITHOUT=$(( NET_WITHOUT / 2 ))
 
-############################################################
-# 4. NETWORK NAMESPACE
-############################################################
-echo "[NET] Network isolation"
-echo "Context:"
-echo " - With --net: container sees minimal interfaces."
-echo " - Without --net: container sees host interfaces."
+row "With --net"    "$IF_WITH interface(s)"    "$GREEN"
+row "Without --net" "$IF_WITHOUT interface(s)" "$YELLOW"
 echo
 
-WITH=$($ENGINE run --net $ROOTFS /bin/sh -c "ip link show | wc -l")
-WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "ip link show | wc -l")
+if [ "$IF_WITH" -lt "$IF_WITHOUT" ]; then
+    badge_pass "Fewer interfaces inside namespace ($IF_WITH vs $IF_WITHOUT)"
+else
+    badge_fail "Interface count unchanged — network isolation may have failed"
+fi
 
-line "With --net:" "$WITH interfaces"
-line "Without --net:" "$WITHOUT interfaces"
+# ── 5. IPC ───────────────────────────────────────────────────────────────────
+banner "[IPC]" "IPC Isolation" "$MAGENTA"
+ctx "With --ipc: container sees an empty IPC table."
+ctx "Without --ipc: container inherits host IPC queues."
 echo
 
-############################################################
-# 5. IPC NAMESPACE
-############################################################
-echo "[IPC] IPC isolation"
-echo "Context:"
-echo " - With --ipc: container sees empty IPC tables."
-echo " - Without --ipc: container sees host IPC queues."
+IPC_WITH=$($ENGINE run --ipc $ROOTFS /bin/sh -c "ipcs -q | awk 'NR>2 && \$1 ~ /^0x/' | wc -l")
+IPC_WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "ipcs -q | awk 'NR>2 && \$1 ~ /^0x/' | wc -l")
+
+row "With --ipc"    "$IPC_WITH queue(s)"    "$GREEN"
+row "Without --ipc" "$IPC_WITHOUT queue(s)" "$YELLOW"
 echo
 
+if [ "$IPC_WITH" = "0" ]; then
+    badge_pass "With --ipc: empty IPC namespace"
+else
+    badge_fail "With --ipc: expected 0 queues, got $IPC_WITH"
+fi
 
-WITH=$($ENGINE run --ipc $ROOTFS /bin/sh -c "ipcs -q | awk 'NR>2 && \$1 ~ /^0x/' | wc -l")
-WITHOUT=$($ENGINE run $ROOTFS /bin/sh -c "ipcs -q | awk 'NR>2 && \$1 ~ /^0x/' | wc -l")
-
-line "With --ipc:" "$WITH queues"
-line "Without --ipc:" "$WITHOUT queues"
+# ── 6. USER ──────────────────────────────────────────────────────────────────
+banner "[USER]" "UID/GID Mapping Isolation" "$BLUE"
+ctx "With --user: namespace inode changes AND uid_map is populated."
+ctx "Without --user: user namespace inode matches host."
 echo
 
-############################################################
-# 6. USER NAMESPACE (INODE & MAP TEST)
-############################################################
-echo "[USER] UID/GID mapping isolation"
-echo "Context:"
-echo " - With --user: user namespace inode changes AND a mapping exists."
-echo " - Without --user: user namespace matches host inode."
-echo
-
-# 1. Capture the Host's true User Namespace Inode
 HOST_USER_NS=$(readlink /proc/self/ns/user)
-
-# 2. Capture the Container's User Namespace details (with and without --user)
 CONTAINER_WITH_USER=$($ENGINE run --user $ROOTFS /bin/sh -c "readlink /proc/self/ns/user" || echo "ERROR")
 CONTAINER_WITH_MAP=$($ENGINE run --user $ROOTFS /bin/sh -c "cat /proc/self/uid_map" || echo "ERROR")
 CONTAINER_WITHOUT_USER=$($ENGINE run $ROOTFS /bin/sh -c "readlink /proc/self/ns/user" || echo "ERROR")
 
-# 3. Evaluate results securely using string comparison
-if [ "$HOST_USER_NS" = "$CONTAINER_WITHOUT_USER" ]; then
-    WITHOUT_RESULT="PASS (Shared with host: $CONTAINER_WITHOUT_USER)"
-else
-    WITHOUT_RESULT="FAIL (Leaked/Mutated namespace: $CONTAINER_WITHOUT_USER)"
-fi
+row "Host user namespace inode"  "$HOST_USER_NS"          "$WHITE"
+row "With --user inode"          "$CONTAINER_WITH_USER"   "$GREEN"
+row "Without --user inode"       "$CONTAINER_WITHOUT_USER" "$YELLOW"
+echo
 
 if [ "$HOST_USER_NS" != "$CONTAINER_WITH_USER" ] && [ "$CONTAINER_WITH_USER" != "ERROR" ]; then
-    # Ensure uid_map is populated and valid (not empty or errored)
     if [ -n "$CONTAINER_WITH_MAP" ] && [ "$CONTAINER_WITH_MAP" != "ERROR" ]; then
-        WITH_RESULT="PASS (Isolated User NS: $CONTAINER_WITH_USER)"
+        badge_pass "With --user: isolated namespace + uid_map present"
     else
-        WITH_RESULT="FAIL (Namespace changed but uid_map missing/empty)"
+        badge_fail "With --user: namespace changed but uid_map missing"
     fi
 else
-    WITH_RESULT="FAIL (Not isolated or Engine crashed)"
+    badge_fail "With --user: not isolated or engine crashed"
 fi
 
-# Output clean, descriptive lines
-line "Host User Namespace Inode:" "$HOST_USER_NS"
-line "With --user implementation:"   "$WITH_RESULT"
-line "Without --user implementation:" "$WITHOUT_RESULT"
+if [ "$HOST_USER_NS" = "$CONTAINER_WITHOUT_USER" ]; then
+    badge_pass "Without --user: shared host namespace (expected)"
+else
+    badge_fail "Without --user: unexpected namespace change ($CONTAINER_WITHOUT_USER)"
+fi
+
+# ── 7. RESOURCE LIMITS ───────────────────────────────────────────────────────
+banner "[RESOURCE]" "Memory / CPU Limit Enforcement" "$YELLOW"
+ctx "Real Linux: cgroup v2 limits enforced in-kernel."
+ctx "WSL2: no cgroup support — RLIMITs used as fallback."
 echo
 
-############################################################
-# 7. RESOURCE LIMIT TEST (CGROUP v2 on Linux, RLIMIT on WSL2)
-############################################################
-echo "[RESOURCE] Memory/CPU limit enforcement"
-echo "Context:"
-echo " - Real Linux: cgroup v2 limits apply even with --user."
-echo " - WSL2: no cgroups; only RLIMITs can be inspected."
-echo " - Test always runs inside a fresh container."
-echo
-
-# Detect WSL2 by kernel string
 KERNEL=$(uname -r | tr '[:upper:]' '[:lower:]')
 if echo "$KERNEL" | grep -q "microsoft"; then
     IS_WSL2=1
@@ -186,52 +227,61 @@ else
 fi
 
 if [ "$IS_WSL2" -eq 1 ]; then
-    echo "[WSL2 MODE] Inspecting RLIMITs inside container"
-    RLIMITS=$($ENGINE run $ROOTFS /bin/sh -c 'cat /proc/self/limits | grep -E "Max cpu time|Max address space|Max processes|Max open files"' 2>/dev/null)
+    badge_info "WSL2 detected — inspecting RLIMITs inside container"
+    echo
+
+    RLIMITS=$($ENGINE run $ROOTFS /bin/sh -c \
+        'cat /proc/self/limits | grep -E "Max cpu time|Max address space|Max processes|Max open files"' 2>/dev/null)
 
     if [ -z "$RLIMITS" ]; then
-        line "RLIMIT read:" "FAIL (container failed)"
+        badge_fail "RLIMIT read failed (container did not launch)"
     else
-        line "RLIMIT read:" "OK (see below)"
-        echo "$RLIMITS"
+        badge_pass "RLIMIT read OK"
+        echo
+        printf "  ${DIM}%-26s %10s  %10s  %s${RESET}\n" "Limit" "Soft" "Hard" "Unit"
+        printf "  ${DIM}%s${RESET}\n" "$(printf '─%.0s' $(seq 1 56))"
+        while IFS= read -r line; do
+            label=$(echo "$line" | cut -c1-25 | sed 's/[[:space:]]*$//')
+            soft=$(echo "$line"  | cut -c26-45 | tr -d ' ')
+            hard=$(echo "$line"  | cut -c46-65 | tr -d ' ')
+            unit=$(echo "$line"  | cut -c66-   | tr -d ' ')
+            printf "  ${WHITE}%-26s${RESET} ${GREEN}%10s${RESET}  ${GREEN}%10s${RESET}  ${DIM}%s${RESET}\n" \
+                "$label" "$soft" "$hard" "$unit"
+        done <<< "$RLIMITS"
+        echo
+        badge_skip "Cgroup v2 tests not supported on WSL2 — skipped"
     fi
-
-    echo
-    echo "croup tests will be skipped (Not supported in WSL MODE)"
-    echo
 fi
 
 if [ "$IS_WSL2" -eq 0 ]; then
-    echo "[LINUX MODE] Checking cgroup v2 memory.max"
+    badge_info "Linux detected — checking cgroup v2 memory.max"
+    echo
 
-    # Get container's cgroup path from inside
-    CGROUP_PATH=$($ENGINE run $ROOTFS /bin/sh -c '
-    CG=$(grep "^0::" /proc/self/cgroup | cut -d: -f3)
-    echo "$CG"
-    ')
+    CGROUP_PATH=$($ENGINE run $ROOTFS /bin/sh -c \
+        'CG=$(grep "^0::" /proc/self/cgroup | cut -d: -f3); echo "$CG"')
 
     if [ -z "$CGROUP_PATH" ]; then
-        line "Container cgroup path:" "FAIL (empty)"
-        echo
-        return
-    fi
-
-    line "Container cgroup path:" "$CGROUP_PATH"
-
-    # Check memory.max on host
-    if [ -f "/sys/fs/cgroup/$CGROUP_PATH/memory.max" ]; then
-        MEM_LIMIT=$(cat "/sys/fs/cgroup/$CGROUP_PATH/memory.max")
-        if [ "$MEM_LIMIT" = "104857600" ]; then
-            RESULT="PASS (memory.max = $MEM_LIMIT)"
-        else
-            RESULT="FAIL (memory.max = $MEM_LIMIT)"
-        fi
+        badge_fail "Container cgroup path empty — cgroup not mounted?"
     else
-        RESULT="FAIL (memory.max missing)"
-    fi
+        row "Container cgroup path" "$CGROUP_PATH" "$CYAN"
+        echo
 
-    line "Cgroup memory limit:" "$RESULT"
-    echo
+        if [ -f "/sys/fs/cgroup/$CGROUP_PATH/memory.max" ]; then
+            MEM_LIMIT=$(cat "/sys/fs/cgroup/$CGROUP_PATH/memory.max")
+            if [ "$MEM_LIMIT" = "104857600" ]; then
+                badge_pass "memory.max = $MEM_LIMIT (100 MiB)"
+            else
+                badge_fail "memory.max = $MEM_LIMIT (expected 104857600)"
+            fi
+        else
+            badge_fail "memory.max file not found at /sys/fs/cgroup/$CGROUP_PATH/"
+        fi
+    fi
 fi
 
-echo "==================== TEST COMPLETE ====================="
+# ── Footer ───────────────────────────────────────────────────────────────────
+echo
+hline
+printf "${BOLD}  %-20s${RESET}\n" "Test run complete"
+hline
+echo
