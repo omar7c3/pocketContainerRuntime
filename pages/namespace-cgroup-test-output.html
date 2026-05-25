@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pocketContainerRuntime — Test Results</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: 'JetBrains Mono', 'Fira Mono', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 2rem;
+  }
+
+  .terminal {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  /* Header banner */
+  .header {
+    background: #1a3a5c;
+    color: #e6f1fb;
+    padding: 0.5rem 1.2rem;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    margin-bottom: 2px;
+  }
+  .subheader {
+    color: #5a6a7a;
+    padding: 0 1.2rem 1.2rem;
+    font-size: 13px;
+  }
+
+  /* Section */
+  .section { margin-top: 1.8rem; }
+
+  .section-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.3rem;
+  }
+  .tag { font-weight: 700; font-size: 14px; }
+  .tag.uts    { color: #56d6e8; }
+  .tag.pid    { color: #c792ea; }
+  .tag.mnt    { color: #82aaff; }
+  .tag.net    { color: #56d6e8; }
+  .tag.ipc    { color: #c792ea; }
+  .tag.user   { color: #82aaff; }
+  .tag.res    { color: #e6c073; }
+
+  .section-name { color: #e6edf3; font-weight: 700; font-size: 14px; }
+
+  .hline {
+    border: none;
+    border-top: 1px solid #2a3a4a;
+    margin: 0.3rem 0 0.8rem;
+  }
+
+  /* Context lines */
+  .ctx { color: #5a6a7a; font-size: 13px; margin-bottom: 2px; }
+
+  /* Key / value rows */
+  .rows { margin: 0.9rem 0; }
+  .row {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1px;
+  }
+  .row-key {
+    color: #5a6a7a;
+    min-width: 34ch;
+  }
+  .row-val { }
+  .val-white  { color: #c9d1d9; }
+  .val-green  { color: #89ddae; }
+  .val-yellow { color: #e6c073; }
+  .val-cyan   { color: #56d6e8; }
+
+  /* Spacer inside rows group */
+  .row-gap { height: 0.6rem; }
+
+  /* Badges */
+  .badges { margin-top: 0.7rem; }
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 3px;
+    font-size: 13.5px;
+  }
+  .badge-icon { font-weight: 700; min-width: 8ch; }
+  .badge.pass .badge-icon { color: #89ddae; }
+  .badge.fail .badge-icon { color: #f07178; }
+  .badge.skip .badge-icon { color: #e6c073; }
+  .badge.info .badge-icon { color: #56d6e8; }
+  .badge.pass .badge-text { color: #c9d1d9; }
+  .badge.fail .badge-text { color: #c9d1d9; }
+  .badge.skip .badge-text { color: #c9d1d9; }
+  .badge.info .badge-text { color: #c9d1d9; }
+
+  /* RLIMIT table */
+  .rlimit-table {
+    margin: 0.8rem 0 0.8rem 0;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .rlimit-table th {
+    color: #5a6a7a;
+    font-weight: 400;
+    font-size: 13px;
+    text-align: left;
+    padding: 0 1rem 0.3rem 0;
+  }
+  .rlimit-table th:not(:first-child) { text-align: right; }
+  .rlimit-table .tline td {
+    border-top: 1px solid #2a3a4a;
+    padding-top: 0.3rem;
+  }
+  .rlimit-table td {
+    color: #89ddae;
+    font-size: 13px;
+    padding: 1px 1rem 1px 0;
+    text-align: right;
+  }
+  .rlimit-table td:first-child { color: #c9d1d9; text-align: left; }
+  .rlimit-table td:last-child  { color: #5a6a7a; }
+
+  /* Info note */
+  .info-note {
+    color: #5a6a7a;
+    font-size: 13px;
+    margin: 0.3rem 0 0.8rem;
+  }
+  .info-note span { color: #56d6e8; }
+
+  /* Footer */
+  .footer { margin-top: 2rem; }
+  .footer-text { color: #c9d1d9; font-weight: 700; font-size: 13.5px; padding: 0.5rem 0; }
+</style>
+</head>
+<body>
+<div class="terminal">
+
+  <!-- Header -->
+  <div class="header">  pocketContainerRuntime — Namespace &amp; Cgroup Test</div>
+  <div class="subheader">  namespace-cgroup-test.sh</div>
+
+  <!-- UTS -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag uts">[UTS]</span>
+      <span class="section-name">Hostname Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  With --uts: container gets its own hostname (changes stay inside).</div>
+    <div class="ctx">  Without --uts: hostname changes bleed back to the host.</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  Host before</span><span class="val-white">uts-demo-27306</span></div>
+      <div class="row"><span class="row-key">  Host after</span><span class="val-white">uts-demo-8375</span></div>
+      <div class="row-gap"></div>
+      <div class="row"><span class="row-key">  With --uts  (before)</span><span class="val-green">edu-container</span></div>
+      <div class="row"><span class="row-key">  With --uts  (after)</span><span class="val-green">uts-demo</span></div>
+      <div class="row-gap"></div>
+      <div class="row"><span class="row-key">  Without --uts (before)</span><span class="val-yellow">uts-demo-27306</span></div>
+      <div class="row"><span class="row-key">  Without --uts (after)</span><span class="val-yellow">uts-demo-8375</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">With --uts: hostname change stayed inside container</span></div>
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">Without --uts: hostname change visible on host (expected)</span></div>
+    </div>
+  </div>
+
+  <!-- PID -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag pid">[PID]</span>
+      <span class="section-name">Process Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  With --pid: container init is PID 1 (full PID namespace).</div>
+    <div class="ctx">  Without --pid: process keeps its host PID.</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  With --pid</span><span class="val-green">1</span></div>
+      <div class="row"><span class="row-key">  Without --pid</span><span class="val-yellow">1042</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">PID inside namespace is 1</span></div>
+    </div>
+  </div>
+
+  <!-- MNT -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag mnt">[MNT]</span>
+      <span class="section-name">Mount-Tree Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  Tests mount namespace inode — NOT storage isolation.</div>
+    <div class="ctx">  With --mnt: inode differs from host. Without --mnt: inode matches.</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  Host namespace inode</span><span class="val-white">mnt:[4026532221]</span></div>
+      <div class="row"><span class="row-key">  With --mnt inode</span><span class="val-green">mnt:[4026532229]</span></div>
+      <div class="row"><span class="row-key">  Without --mnt inode</span><span class="val-yellow">mnt:[4026532221]</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">With --mnt: namespace isolated (mnt:[4026532229])</span></div>
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">Without --mnt: namespace shared with host</span></div>
+    </div>
+  </div>
+
+  <!-- NET -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag net">[NET]</span>
+      <span class="section-name">Network Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  With --net: container sees minimal interfaces (lo only).</div>
+    <div class="ctx">  Without --net: container inherits all host interfaces.</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  With --net</span><span class="val-green">1 interface(s)</span></div>
+      <div class="row"><span class="row-key">  Without --net</span><span class="val-yellow">2 interface(s)</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">Fewer interfaces inside namespace (1 vs 2)</span></div>
+    </div>
+  </div>
+
+  <!-- IPC -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag ipc">[IPC]</span>
+      <span class="section-name">IPC Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  With --ipc: container sees an empty IPC table.</div>
+    <div class="ctx">  Without --ipc: container inherits host IPC queues.</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  With --ipc</span><span class="val-green">0 queue(s)</span></div>
+      <div class="row"><span class="row-key">  Without --ipc</span><span class="val-yellow">1 queue(s)</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">With --ipc: empty IPC namespace</span></div>
+    </div>
+  </div>
+
+  <!-- USER -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag user">[USER]</span>
+      <span class="section-name">UID/GID Mapping Isolation</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  With --user: namespace inode changes AND uid_map is populated.</div>
+    <div class="ctx">  Without --user: user namespace inode matches host.</div>
+    <div class="info-note">  <span>info:</span> --user requested, enabling --mnt automatically</div>
+    <div class="rows">
+      <div class="row"><span class="row-key">  Host user namespace inode</span><span class="val-white">user:[4026531837]</span></div>
+      <div class="row"><span class="row-key">  With --user inode</span><span class="val-green">user:[4026532289]</span></div>
+      <div class="row"><span class="row-key">  Without --user inode</span><span class="val-yellow">user:[4026531837]</span></div>
+    </div>
+    <div class="badges">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">With --user: isolated namespace + uid_map present</span></div>
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">Without --user: shared host namespace (expected)</span></div>
+    </div>
+  </div>
+
+  <!-- RESOURCE -->
+  <div class="section">
+    <div class="section-title">
+      <span class="tag res">[RESOURCE]</span>
+      <span class="section-name">Memory / CPU Limit Enforcement</span>
+    </div>
+    <hr class="hline">
+    <div class="ctx">  Real Linux: cgroup v2 limits enforced in-kernel.</div>
+    <div class="ctx">  WSL2: no cgroup support — RLIMITs used as fallback.</div>
+    <div class="badges" style="margin-top:0.8rem">
+      <div class="badge info"><span class="badge-icon">  ℹ  INFO</span><span class="badge-text">WSL2 detected — inspecting RLIMITs inside container</span></div>
+    </div>
+    <div class="badges" style="margin-top:0.5rem">
+      <div class="badge pass"><span class="badge-icon">  ✔  PASS</span><span class="badge-text">RLIMIT read OK</span></div>
+    </div>
+    <table class="rlimit-table">
+      <thead>
+        <tr>
+          <th>  Limit</th>
+          <th>Soft</th>
+          <th>Hard</th>
+          <th>Unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="tline">
+          <td>  Max cpu time</td><td>2</td><td>2</td><td>seconds</td>
+        </tr>
+        <tr>
+          <td>  Max processes</td><td>64</td><td>64</td><td>processes</td>
+        </tr>
+        <tr>
+          <td>  Max open files</td><td>1024</td><td>1024</td><td>files</td>
+        </tr>
+        <tr>
+          <td>  Max address space</td><td>104857600</td><td>104857600</td><td>bytes</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="badges">
+      <div class="badge skip"><span class="badge-icon">  ⊘  SKIP</span><span class="badge-text">Cgroup v2 tests not supported on WSL2 — skipped</span></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <hr class="hline">
+    <div class="footer-text">  Test run complete</div>
+    <hr class="hline">
+  </div>
+
+</div>
+</body>
+</html>
