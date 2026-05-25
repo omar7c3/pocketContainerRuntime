@@ -148,7 +148,8 @@ Example output:
   "rootfs": "rootfs",
   "cmd": ["/bin/sh"],
   "restart_policy": "on-crash",
-  "started_at": "2025-01-01T10:00:00Z"
+  "started_at": "2025-01-01T10:00:505586346Z",
+  "finished_at": "2025-01-01T21:06:34.332904802Z"
 }
 ```
 
