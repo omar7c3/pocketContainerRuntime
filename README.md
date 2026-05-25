@@ -39,7 +39,10 @@ go mod init pocketctr
 go mod tidy
 
 # Build the runtime
-go build -o pocketctr .
+go build pocketContainerRuntime.go
+
+# Make the test script executable so it can be run directly
+chmod +x ./namespace-cgroup-test.sh
 
 # Download and prepare a minimal Alpine Linux root filesystem (required)
 # This rootfs will serve as the container's filesystem environment
