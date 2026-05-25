@@ -35,7 +35,7 @@ git clone https://github.com/omar7c3/pocketContainerRuntime
 cd pocketContainerRuntime
 
 # Initialize Go module (required)
-go mod init pocketctr
+go mod init pocketContainerRuntime
 go mod tidy
 
 # Build the runtime
@@ -58,19 +58,19 @@ tar -xzf alpine-minirootfs-3.20.9-x86_64.tar.gz -C rootfs
 Run a command inside an isolated container environment:
 
 ```bash
-./pocketctr run rootfs /bin/sh
+./pocketContainerRuntime run rootfs /bin/sh
 ```
 
 Enable specific namespaces:
 
 ```bash
-./pocketctr run --uts --pid --mnt --net --ipc rootfs /bin/sh
+./pocketContainerRuntime run --uts --pid --mnt --net --ipc rootfs /bin/sh
 ```
 
 Run in rootless mode:
 
 ```bash
-./pocketctr run --user rootfs /bin/sh
+./pocketContainerRuntime run --user rootfs /bin/sh
 ```
 
 ---
